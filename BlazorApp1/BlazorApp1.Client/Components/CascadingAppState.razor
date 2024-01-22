@@ -1,0 +1,216 @@
+﻿@implements IAppState
+@inject ILocalStorageService LocalStorageService
+@using BlazorApp1.Shared.HubModels
+
+<CascadingValue Value="this">
+    @ChildContent
+</CascadingValue>
+
+@code {
+
+    [Parameter]
+    public RenderFragment ChildContent { get; set; }
+    private string Caller = "";
+    public int TimeToLiveInSeconds { get; set; } = 43200; //12hrs
+    public DateTime LastAccessed { get; set; } = DateTime.Now;
+
+    public void SetProperty(ComponentBase caller, string PropertyName, object PropertyValue, bool SaveChanges = true)
+    {
+        try
+        {
+            var prop = this.GetType().GetProperty(PropertyName);
+            if (prop != null)
+            {
+                this.Caller = caller.GetType().Name;
+                prop.SetValue(this, PropertyValue);
+                if (SaveChanges)
+                {
+                    this.SaveChanges();
+                }
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+
+        }
+    }
+
+    private string? _token;
+    public string? Token
+    {
+        get { return _token; }
+        set { _token = value; }
+    }
+
+    private string? _currentPage="/";
+    public string? CurrentPage
+    {
+        get { return _currentPage; }
+        set { _currentPage = value; }
+    }
+
+    private string? _currentPageTarget = null;
+    public string? CurrentPageTarget
+    {
+        get { return _currentPageTarget; }
+        set { _currentPageTarget = value; }
+    }
+
+    private string? _activeMainTab = "/";
+    public string? ActiveMainTab
+    {
+        get { return _activeMainTab; }
+        set { _activeMainTab = value; }
+    }
+
+    private string? _activeMainTabTarget = null;
+    public string? ActiveMainTabTarget
+    {
+        get { return _activeMainTabTarget; }
+        set { _activeMainTabTarget = value; }
+    }
+
+    private int? _planPageActiveTabIndex = 0;
+    public int? PlanPageActiveTabIndex
+    {
+        get { return _planPageActiveTabIndex; }
+        set { _planPageActiveTabIndex = value; }
+    }
+
+    private int? _planPageTargetTabIndex = 0;
+    public int? PlanPageTargetTabIndex
+    {
+        get { return _planPageTargetTabIndex; }
+        set { _planPageTargetTabIndex = value; }
+    }
+
+    private int? _researchPageActiveTabIndex = 0;
+    public int? ResearchPageActiveTabIndex
+    {
+        get { return _researchPageActiveTabIndex; }
+        set { _researchPageActiveTabIndex = value; }
+    }
+
+    private int? _researchPageTargetTabIndex = 0;
+    public int? ResearchPageTargetTabIndex
+    {
+        get { return _researchPageTargetTabIndex; }
+        set { _researchPageTargetTabIndex = value; }
+    }
+
+    private string? _userFullName = "/";
+    public string? UserFullName
+    {
+        get { return _userFullName; }
+        set { _userFullName = value; }
+    }
+
+
+    private string? _PlanPageState = "";
+    public string? PlanPageState
+    {
+        get => _PlanPageState;
+        set => _PlanPageState = value;
+    }
+
+    private bool isLoggedIn = false;
+    public bool IsLoggedIn
+    {
+        get => isLoggedIn;
+        private set
+        {
+            isLoggedIn = value;
+        }
+    }
+
+    private HubUserModel? _currentUser;
+    public HubUserModel? CurrentUser
+    {
+        get => _currentUser;
+        private set
+        {
+            _currentUser = value;
+        }
+    }
+
+    public bool IsDevelopment { get; set; }
+
+
+    //Keep Counter as example
+    private int _counter = 0;
+    public int Counter
+    {
+        get => _counter;
+        private set
+        {
+            _counter = value;
+            if (Caller == "Counter")
+            {
+                // The Counter page changed the AppState Counter property
+            }
+        }
+    }
+
+    //grid sync state storage
+    public int SelectedClientId { get; set; }
+    public int SelectedPlanId { get; set; }
+    public int SelectedInvestmentId { get; set; }
+    public int SelectedManagerId { get; set; }
+    public int SelectedProductId { get; set; }
+    public int SelectedVehicleId { get; set; }
+    public string? CurrentEntityType { get; set; }
+    public string? CurrentEntityName { get; set; }
+    public int? CurrentEntityId { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) // do this only once
+        {
+            // Get the JSON data
+            var json = await LocalStorageService.GetItemAsStringAsync("AppStateJson");
+            if (json != null && json != "")
+            {
+                // Deserialize to AppStateData
+                var appStateData = JsonSerializer.Deserialize<AppStateData>(json);
+                // Are we within the time window?
+                if (DateTime.Now <= appStateData.LastAccessed
+                    .AddSeconds(appStateData.TimeToLiveInSeconds))
+                {
+                    // Yes! use our own SetProperty method to set our property values
+                    var properties = appStateData.GetType().GetProperties();
+                    foreach (var property in properties)
+                    {
+                        var type = property.PropertyType;
+                        var value = property.GetValue(appStateData);
+                        SetProperty(this, property.Name, value, false);
+                    }
+                    // Re-render
+                    await InvokeAsync(StateHasChanged);
+                }
+            }
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+
+    }
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+    }
+
+    public void SaveChanges()
+    {
+        // LocalStorage allows up to 5MB by default.
+        // Test: https://arty.name/localstorage.html
+        // TIP: Never store sensitive data in LocalStorage
+
+        LastAccessed = DateTime.Now;
+        var appstate = (IAppState) this;
+        var json = System.Text.Json.JsonSerializer.Serialize(appstate);
+        LocalStorageService.SetItemAsStringAsync("AppStateJson", json);
+    }
+}
